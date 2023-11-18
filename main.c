@@ -1039,37 +1039,48 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			POINT cursor;
 			GetCursorPos(&cursor);
 			ScreenToClient(hwnd,&cursor);
-			if (PtInRect(&buttonMinimize.rect,cursor)){
-				if (hoveredButton != &buttonMinimize){
-					hoveredButton = &buttonMinimize;
-					InvalidateRect(hwnd,0,0);
-				}
-			} else if (PtInRect(&buttonMaximize.rect,cursor)){
-				if (hoveredButton != &buttonMaximize){
-					hoveredButton = &buttonMaximize;
-					InvalidateRect(hwnd,0,0);
-				}
-			} else if (PtInRect(&buttonClose.rect,cursor)){
-				if (hoveredButton != &buttonClose){
-					hoveredButton = &buttonClose;
-					InvalidateRect(hwnd,0,0);
-				}
-			} else if (PtInRect(&buttonOpenImage.rect,cursor)){
-				if (hoveredButton != &buttonOpenImage){
-					hoveredButton = &buttonOpenImage;
-					InvalidateRect(hwnd,0,0);
-				}
-			} else if (PtInRect(&buttonInterpolation.rect,cursor)){
-				if (hoveredButton != &buttonInterpolation){
-					hoveredButton = &buttonInterpolation;
-					InvalidateRect(hwnd,0,0);
-				}
-			} else if (hoveredButton){
-				hoveredButton = 0;
-				InvalidateRect(hwnd,0,0);
+			if (PtInRect(&rClient,cursor)){
+				SetCursor(scale > 1 ? cursorPan : cursorArrow);
+			} else if (PtInRect(&rTitlebar,cursor) && GetCursor()==cursorPan){
+				SetCursor(cursorArrow);
 			}
-			TRACKMOUSEEVENT tme = {sizeof(tme),uMsg == WM_NCMOUSEMOVE ? TME_LEAVE|TME_NONCLIENT : TME_LEAVE,hwnd,0};
-			TrackMouseEvent(&tme);
+			if (pan){
+				pos[0] = originalPos[0] + (cursor.x - panPoint.x);
+				pos[1] = originalPos[1] + (cursor.y - panPoint.y);
+				InvalidateRect(hwnd,0,0);
+			} else {
+				if (PtInRect(&buttonMinimize.rect,cursor)){
+					if (hoveredButton != &buttonMinimize){
+						hoveredButton = &buttonMinimize;
+						InvalidateRect(hwnd,0,0);
+					}
+				} else if (PtInRect(&buttonMaximize.rect,cursor)){
+					if (hoveredButton != &buttonMaximize){
+						hoveredButton = &buttonMaximize;
+						InvalidateRect(hwnd,0,0);
+					}
+				} else if (PtInRect(&buttonClose.rect,cursor)){
+					if (hoveredButton != &buttonClose){
+						hoveredButton = &buttonClose;
+						InvalidateRect(hwnd,0,0);
+					}
+				} else if (PtInRect(&buttonOpenImage.rect,cursor)){
+					if (hoveredButton != &buttonOpenImage){
+						hoveredButton = &buttonOpenImage;
+						InvalidateRect(hwnd,0,0);
+					}
+				} else if (PtInRect(&buttonInterpolation.rect,cursor)){
+					if (hoveredButton != &buttonInterpolation){
+						hoveredButton = &buttonInterpolation;
+						InvalidateRect(hwnd,0,0);
+					}
+				} else if (hoveredButton){
+					hoveredButton = 0;
+					InvalidateRect(hwnd,0,0);
+				}
+				TRACKMOUSEEVENT tme = {sizeof(tme),uMsg == WM_NCMOUSEMOVE ? TME_LEAVE|TME_NONCLIENT : TME_LEAVE,hwnd,0};
+				TrackMouseEvent(&tme);
+			}
 			return 0;
 		}
 		case WM_NCMOUSELEAVE:case WM_MOUSELEAVE:
@@ -1078,12 +1089,50 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 				InvalidateRect(hwnd,0,0);
 			}
 			return 0;
-		case WM_NCLBUTTONDOWN:case WM_NCLBUTTONDBLCLK:case WM_LBUTTONDOWN:case WM_LBUTTONDBLCLK:
+		case WM_NCLBUTTONDOWN:case WM_NCLBUTTONDBLCLK:case WM_LBUTTONDOWN:case WM_LBUTTONDBLCLK:{
+			POINT pt;
+			GetCursorPos(&pt);
+			ScreenToClient(hwnd,&pt);
 			if (hoveredButton && hoveredButton->func){
 				hoveredButton->func();
 				return 0;
+			} else if (PtInRect(&rClient,pt) && scale > 1){
+				panPoint = pt;
+				originalPos[0] = pos[0];
+				originalPos[1] = pos[1];
+				originalPos[2] = pos[2];
+				pan = true;
 			}
 			break;
+		}
+		case WM_NCLBUTTONUP:case WM_LBUTTONUP:{
+			pan = false;
+			return 0;
+		}
+		case WM_MOUSEWHEEL:{
+			POINT pt;
+			GetCursorPos(&pt);
+			ScreenToClient(hwnd,&pt);
+			if (PtInRect(&rClient,pt)){
+				int oldScale = scale;
+				scale = max(1,scale+CLAMP(GET_WHEEL_DELTA_WPARAM(wParam)/WHEEL_DELTA,-1,1));
+				if (oldScale != scale){
+					pt.y -= rClient.top;
+					pt.x -= pos[0];
+					pt.y -= pos[1];
+					if (scale > oldScale){
+						pos[0] -= pt.x / (float)(scale-1);
+						pos[1] -= pt.y / (float)(scale-1);
+					} else {
+						pos[0] += pt.x / (float)(scale+1);
+						pos[1] += pt.y / (float)(scale+1);
+					}
+					InvalidateRect(hwnd,0,0);
+					if (GetCursor() != cursorFinger) SetCursor(scale == 1 ? cursorArrow : cursorPan);
+				}
+			}
+			return 0;
+		}
 		case WM_PAINT:{
 			PAINTSTRUCT ps;
 			HDC phdc = BeginPaint(hwnd,&ps), hdc;
@@ -1095,6 +1144,36 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			CalcRects(hdc);
 			BOOL focus = GetFocus();
 			SelectObject(hdc,focus ? penFocused : penUnfocused);
+
+			if (image.pixels){
+				float width = min(rClient.right,image.width);
+				float height = width * ((float)image.height/(float)image.width);
+				float clientHeight = rClient.bottom-rClient.top;
+				if (height > clientHeight){
+					height = clientHeight;
+					width = height * ((float)image.width/(float)image.height);
+				}
+				width *= scale;
+				height *= scale;
+				if (scale == 1){
+					pos[0] = (rClient.right-(int)width)/2;
+					pos[1] = (clientHeight-(int)height)/2;
+					pos[2] = -1;
+				}
+
+				BITMAPINFO_TRUECOLOR32 bmi = {0};
+				bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+				bmi.bmiHeader.biWidth = image.width;
+				bmi.bmiHeader.biHeight = -image.height;
+				bmi.bmiHeader.biPlanes = 1;
+				bmi.bmiHeader.biCompression = BI_RGB | BI_BITFIELDS;
+				bmi.bmiHeader.biBitCount = 32;
+				bmi.bmiColors[0].rgbRed = 0xff;
+				bmi.bmiColors[1].rgbGreen = 0xff;
+				bmi.bmiColors[2].rgbBlue = 0xff;
+				SetStretchBltMode(hdc,interpolation ? HALFTONE : COLORONCOLOR);
+				StretchDIBits(hdc,pos[0],rClient.top + pos[1],width,height,0,0,image.width,image.height,image.pixels,&bmi,DIB_RGB_COLORS,SRCCOPY);
+			}
 
 			FillRect(hdc,&rCaption,brushCaption);
 			FillRect(hdc,&buttonMinimize.rect,hoveredButton == &buttonMinimize ? brushSystemHovered : brushSystem);
@@ -1135,21 +1214,6 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			DrawTextW(hdc,buttonInterpolation.string,wcslen(buttonInterpolation.string),&buttonInterpolation.rect,DT_NOPREFIX|DT_SINGLELINE|DT_CENTER|DT_VCENTER);
 			GetWindowTextW(hwnd,gpath,COUNT(gpath));
 			DrawTextW(hdc,gpath,wcslen(gpath),&rCaption,DT_NOPREFIX|DT_SINGLELINE|DT_CENTER|DT_VCENTER|DT_END_ELLIPSIS);
-
-			if (image.pixels){
-				BITMAPINFO_TRUECOLOR32 bmi = {0};
-				bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-				bmi.bmiHeader.biWidth = image.width;
-				bmi.bmiHeader.biHeight = -image.height;
-				bmi.bmiHeader.biPlanes = 1;
-				bmi.bmiHeader.biCompression = BI_RGB | BI_BITFIELDS;
-				bmi.bmiHeader.biBitCount = 32;
-				bmi.bmiColors[0].rgbRed = 0xff;
-				bmi.bmiColors[1].rgbGreen = 0xff;
-				bmi.bmiColors[2].rgbBlue = 0xff;
-				SetStretchBltMode(hdc,interpolation ? HALFTONE : COLORONCOLOR);
-				StretchDIBits(hdc,rClient.left,rClient.top,rClient.right,rClient.bottom-rClient.top,0,0,image.width,image.height,image.pixels,&bmi,DIB_RGB_COLORS,SRCCOPY);
-			}
 
 			SelectObject(hdc,oldfont);
 			EndBufferedPaint(pb,TRUE);
