@@ -313,12 +313,36 @@ void OpenImage(){
 	}
 }
 void ToggleInterpolation();
+void Left(){
+	if (image.pixels && imageIndex > 0){
+		free(image.pixels);
+		imageIndex--;
+		_snwprintf(gpath,COUNT(gpath),L"%s%s",currentFolder,imagePaths.elements[imageIndex]);
+		ImageFromFile(&image,gpath,0,true);
+		wcscat(gpath,L" - DarkViewer 2");
+		SetWindowTextW(gwnd,gpath);
+		InvalidateRect(gwnd,0,0);
+	}
+}
+void Right(){
+	if (image.pixels && imageIndex < imagePaths.used-1){
+		free(image.pixels);
+		imageIndex++;
+		_snwprintf(gpath,COUNT(gpath),L"%s%s",currentFolder,imagePaths.elements[imageIndex]);
+		ImageFromFile(&image,gpath,0,true);
+		wcscat(gpath,L" - DarkViewer 2");
+		SetWindowTextW(gwnd,gpath);
+		InvalidateRect(gwnd,0,0);
+	}
+}
 Button
 	buttonMinimize = {.func = Minimize},
 	buttonMaximize = {.func = Maximize},
 	buttonClose = {.func = Close},
 	buttonOpenImage = {.string = L"Open Image", .func = OpenImage},
-	buttonInterpolation = {.string = L"Interpolation: Off", .func = ToggleInterpolation};
+	buttonInterpolation = {.string = L"Interpolation: Off", .func = ToggleInterpolation},
+	buttonLeft = {.func = Left},
+	buttonRight = {.func = Right};
 void ToggleInterpolation(){
 	interpolation = !interpolation;
 	buttonInterpolation.string = interpolation ? L"Interpolation: On" : L"Interpolation: Off";
@@ -376,6 +400,16 @@ void CalcRects(HDC hdc){
 	rCaption = rTitlebar;
 	rCaption.left = buttonInterpolation.rect.right;
 	rCaption.right = buttonMinimize.rect.left;
+
+	buttonLeft.rect.top = rClient.top + (rClient.bottom-rClient.top)/2 - 25;
+	buttonLeft.rect.bottom = buttonLeft.rect.top + 50;
+	buttonLeft.rect.left = 20;
+	buttonLeft.rect.right = buttonLeft.rect.left + 20;
+
+	buttonRight.rect.top = buttonLeft.rect.top;
+	buttonRight.rect.right = rClient.right-20;
+	buttonRight.rect.left = buttonRight.rect.right-20;
+	buttonRight.rect.bottom = buttonLeft.rect.bottom;
 }
 
 LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
@@ -477,6 +511,16 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 						hoveredButton = &buttonInterpolation;
 						InvalidateRect(hwnd,0,0);
 					}
+				} else if (PtInRect(&buttonLeft.rect,cursor)){
+					if (hoveredButton != &buttonLeft){
+						hoveredButton = &buttonLeft;
+						InvalidateRect(hwnd,0,0);
+					}
+				} else if (PtInRect(&buttonRight.rect,cursor)){
+					if (hoveredButton != &buttonRight){
+						hoveredButton = &buttonRight;
+						InvalidateRect(hwnd,0,0);
+					}
 				} else if (hoveredButton){
 					hoveredButton = 0;
 					InvalidateRect(hwnd,0,0);
@@ -539,27 +583,11 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 		case WM_KEYDOWN:{
 			switch (wParam){
 				case VK_LEFT:{
-					if (image.pixels && imageIndex > 0){
-						free(image.pixels);
-						imageIndex--;
-						_snwprintf(gpath,COUNT(gpath),L"%s%s",currentFolder,imagePaths.elements[imageIndex]);
-						ImageFromFile(&image,gpath,0,true);
-						wcscat(gpath,L" - DarkViewer 2");
-						SetWindowTextW(hwnd,gpath);
-						InvalidateRect(hwnd,0,0);
-					}
+					Left();
 					return 0;
 				}
 				case VK_RIGHT:{
-					if (image.pixels && imageIndex < imagePaths.used-1){
-						free(image.pixels);
-						imageIndex++;
-						_snwprintf(gpath,COUNT(gpath),L"%s%s",currentFolder,imagePaths.elements[imageIndex]);
-						ImageFromFile(&image,gpath,0,true);
-						wcscat(gpath,L" - DarkViewer 2");
-						SetWindowTextW(hwnd,gpath);
-						InvalidateRect(hwnd,0,0);
-					}
+					Right();
 					return 0;
 				}
 			}
@@ -584,6 +612,7 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			SetTextColor(hdc,RGB(255,255,255));
 			SetBkMode(hdc,TRANSPARENT);
 			CalcRects(hdc);
+
 			BOOL focus = GetFocus();
 			SelectObject(hdc,focus ? penFocused : penUnfocused);
 
@@ -656,6 +685,26 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			DrawTextW(hdc,buttonInterpolation.string,wcslen(buttonInterpolation.string),&buttonInterpolation.rect,DT_NOPREFIX|DT_SINGLELINE|DT_CENTER|DT_VCENTER);
 			GetWindowTextW(hwnd,gpath,COUNT(gpath));
 			DrawTextW(hdc,gpath,wcslen(gpath),&rCaption,DT_NOPREFIX|DT_SINGLELINE|DT_CENTER|DT_VCENTER|DT_END_ELLIPSIS);
+
+			SelectObject(hdc,GetStockObject(WHITE_BRUSH));
+			SelectObject(hdc,GetStockObject(WHITE_PEN));
+			FillRect(hdc,&buttonLeft.rect,hoveredButton == &buttonLeft ? brushSystemHovered : brushSystem);
+			FillRect(hdc,&buttonRight.rect,hoveredButton == &buttonRight ? brushSystemHovered : brushSystem);
+			POINT triangle[3] = {
+				{buttonLeft.rect.left+4,buttonLeft.rect.top+(buttonLeft.rect.bottom-buttonLeft.rect.top)/2},
+			};
+			triangle[1].x = buttonLeft.rect.right-6;
+			triangle[1].y = triangle[0].y - 6;
+			triangle[2].x = buttonLeft.rect.right-6;
+			triangle[2].y = triangle[0].y + 6;
+			Polygon(hdc,triangle,3);
+			triangle[0].x = buttonRight.rect.right-4;
+			triangle[0].y = buttonRight.rect.top+(buttonRight.rect.bottom-buttonRight.rect.top)/2;
+			triangle[1].x = buttonRight.rect.left+6;
+			triangle[1].y = triangle[0].y - 6;
+			triangle[2].x = buttonRight.rect.left+6;
+			triangle[2].y = triangle[0].y + 6;
+			Polygon(hdc,triangle,3);
 
 			SelectObject(hdc,oldfont);
 			EndBufferedPaint(pb,TRUE);
