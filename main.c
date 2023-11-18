@@ -170,7 +170,7 @@ void ImageFromFile(Image *img, WCHAR *path, bool flip, bool bgr){
 	IWICBitmapFrameDecode *pFrame = 0;
 	pDecoder->lpVtbl->GetFrame(pDecoder,0,&pFrame);
 	IWICBitmapSource *convertedSrc = 0;
-	WICConvertBitmapSource(&GUID_WICPixelFormat32bppRGBA,pFrame,&convertedSrc);
+	WICConvertBitmapSource(bgr ? &GUID_WICPixelFormat32bppBGRA : &GUID_WICPixelFormat32bppRGBA,pFrame,&convertedSrc);
 	convertedSrc->lpVtbl->GetSize(convertedSrc,&img->width,&img->height);
 	uint32_t size = img->width*img->height*sizeof(uint32_t);
 	img->rowPitch = img->width*sizeof(uint32_t);
@@ -188,19 +188,29 @@ void ImageFromFile(Image *img, WCHAR *path, bool flip, bool bgr){
 			FatalErrorW(L"ImageFromFile: %s CopyPixels failed",path);
 		}
 	}
-	if (bgr){
-		for (int y = 0; y < img->height; y++){
-			for (int x = 0; x < img->width; x++){
-				uint8_t *p = img->pixels+y*img->width+x;
-				uint8_t r = p[0];
-				p[0] = p[2];
-				p[2] = r;
-			}
-		}
-	}
 	convertedSrc->lpVtbl->Release(convertedSrc);
 	pFrame->lpVtbl->Release(pFrame);
 	pDecoder->lpVtbl->Release(pDecoder);
+}
+void ImageFromFileAlphaOverBlack(Image *img, WCHAR *path, bool flip, bool bgr){
+	ImageFromFile(img,path,flip,bgr);
+	/*
+	GDI's "AlphaBlend" doesn't work for scaling an image up, so instead I manually alpha blend
+	each pixel with black (the background color).
+	The alpha blend formula is
+		color = background * (1 - alpha) + foreground * alpha
+	Because black is 0, this is just
+		color = foreground * alpha
+	*/
+	for (int y = 0; y < img->height; y++){
+		for (int x = 0; x < img->width; x++){
+			uint8_t *p = img->pixels+y*img->width+x;
+			float a = p[3] / 255.0f;
+			p[0] = p[0] * a;
+			p[1] = p[1] * a;
+			p[2] = p[2] * a;
+		}
+	}
 }
 
 /********************** DarkViewer 2 */
@@ -274,7 +284,7 @@ void GetImagesInFolder(LPWSTRList *list, WCHAR *path){
 }
 void OpenImageFromNewFolder(WCHAR *path){
 	if (image.pixels) free(image.pixels);
-	ImageFromFile(&image,path,false,true);
+	ImageFromFileAlphaOverBlack(&image,path,false,true);
 	_snwprintf(gpath,COUNT(gpath),L"%s - DarkViewer 2",path);
 	SetWindowTextW(gwnd,gpath);
 	wcscpy(gpath,path);
@@ -318,7 +328,7 @@ void Left(){
 		free(image.pixels);
 		imageIndex--;
 		_snwprintf(gpath,COUNT(gpath),L"%s%s",currentFolder,imagePaths.elements[imageIndex]);
-		ImageFromFile(&image,gpath,0,true);
+		ImageFromFileAlphaOverBlack(&image,gpath,0,true);
 		wcscat(gpath,L" - DarkViewer 2");
 		SetWindowTextW(gwnd,gpath);
 		InvalidateRect(gwnd,0,0);
@@ -329,7 +339,7 @@ void Right(){
 		free(image.pixels);
 		imageIndex++;
 		_snwprintf(gpath,COUNT(gpath),L"%s%s",currentFolder,imagePaths.elements[imageIndex]);
-		ImageFromFile(&image,gpath,0,true);
+		ImageFromFileAlphaOverBlack(&image,gpath,0,true);
 		wcscat(gpath,L" - DarkViewer 2");
 		SetWindowTextW(gwnd,gpath);
 		InvalidateRect(gwnd,0,0);
