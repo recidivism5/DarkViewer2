@@ -723,104 +723,6 @@ inline void Float4x4LookAtXYView(float m[16], float eye[3], float target[3]){//p
 	m[14] = kx*eye[0] + ky*eye[1] + kz*eye[2];
 	m[15] = 1.0f;
 }
-/*
-inline void Float4x4LookAtXYViewShake(Float4x4 *m, Float3 *eye, Float3 *target){
-Float4x4LookAtXY(m,eye,target);
-
-}
-Float4x4 mat4LookAtShake(FVec3 eye, FVec3 target, FVec3 shakeEuler){
-
-FVec3 z = fvec3Norm(fvec3Sub(eye,target)),
-x = fvec3Norm(fvec3Cross(z,(FVec3){0,1,0})),
-y = fvec3Cross(x,z);
-return mat4Mul(mat4Transpose(mat4Mul(eulerToFloat4x4(shakeEuler),mat4Basis(fvec3Negate(x),y,z))),mat4Pos(fvec3Negate(eye)));
-}
-Float4x4 eulerToFloat4x4(FVec3 e){
-return mat4Mul(mat4RotZ(e.z),mat4Mul(mat4RotY(e.y),mat4RotX(e.x)));
-}
-Float4x4 quatToFloat4x4(FVec4 q){
-Float4x4 m = mat4Identity();
-m.a0 = 1 - 2*(q.y*q.y + q.z*q.z);
-m.a1 = 2*(q.x*q.y + q.z*q.w);
-m.a2 = 2*(q.x*q.z - q.y*q.w);
-
-m.b0 = 2*(q.x*q.y - q.z*q.w);
-m.b1 = 1 - 2*(q.x*q.x + q.z*q.z);
-m.b2 = 2*(q.y*q.z + q.x*q.w);
-
-m.c0 = 2*(q.x*q.z + q.y*q.w);
-m.c1 = 2*(q.y*q.z - q.x*q.w);
-m.c2 = 1 - 2*(q.x*q.x + q.y*q.y);
-return m;
-}
-Float4x4 mat4MtwInverse(Float4x4 m){
-Float4x4 i = mat4TransposeMat3(m);
-i.d.vec3 = fvec3Negate(m.d.vec3);
-return i;
-}
-void mat4Print(Float4x4 m){
-for (int i = 0; i < 4; i++){
-printf("%f %f %f %f\n",m.arr[0*4+i],m.arr[1*4+i],m.arr[2*4+i],m.arr[3*4+i]);
-}
-}
-FVec3 fvec3Rotated(FVec3 v, FVec3 euler){
-return mat4MulFVec4(eulerToFloat4x4(euler),(FVec4){v.x,v.y,v.z,0.0f}).vec3;
-}
-FVec3 normalFromTriangle(FVec3 a, FVec3 b, FVec3 c){
-return fvec3Norm(fvec3Cross(fvec3Sub(b,a),fvec3Sub(c,a)));
-}
-int manhattanDistance(IVec3 a, IVec3 b){
-return abs(a.x-b.x)+abs(a.y-b.y)+abs(a.z-b.z);
-}
-Float4x4 getVP(Camera *c){
-return mat4Mul(mat4Persp(c->fov,c->aspect,0.01f,1024.0f),mat4Mul(mat4Transpose(eulerToFloat4x4(c->euler)),mat4Pos(fvec3Scale(c->position,-1))));
-}
-void rotateCamera(Camera *c, float dx, float dy, float sens){
-c->euler.y += sens * dx;
-c->euler.x += sens * dy;
-c->euler = clampEuler(c->euler);
-}
-//The following SAT implementation is modified from https://stackoverflow.com/a/52010428
-bool getSeparatingPlane(FVec3 RPos, FVec3 Plane, FVec3 *aNormals, FVec3 aHalfExtents, FVec3 *bNormals, FVec3 bHalfExtents){
-return (fabsf(fvec3Dot(RPos,Plane)) > 
-(fabsf(fvec3Dot(fvec3Scale(aNormals[0],aHalfExtents.x),Plane)) +
-fabsf(fvec3Dot(fvec3Scale(aNormals[1],aHalfExtents.y),Plane)) +
-fabsf(fvec3Dot(fvec3Scale(aNormals[2],aHalfExtents.z),Plane)) +
-fabsf(fvec3Dot(fvec3Scale(bNormals[0],bHalfExtents.x),Plane)) + 
-fabsf(fvec3Dot(fvec3Scale(bNormals[1],bHalfExtents.y),Plane)) +
-fabsf(fvec3Dot(fvec3Scale(bNormals[2],bHalfExtents.z),Plane))));
-}
-bool OBBsColliding(OBB *a, OBB *b){
-FVec3 RPos = fvec3Sub(b->position,a->position);
-Float4x4 aRot = eulerToFloat4x4(a->euler);
-FVec3 aNormals[3] = {
-aRot.a.vec3,
-aRot.b.vec3,
-aRot.c.vec3
-};
-Float4x4 bRot = eulerToFloat4x4(b->euler);
-FVec3 bNormals[3] = {
-bRot.a.vec3,
-bRot.b.vec3,
-bRot.c.vec3
-};
-return !(getSeparatingPlane(RPos,aNormals[0],aNormals,a->halfExtents,bNormals,b->halfExtents) ||
-getSeparatingPlane(RPos,aNormals[1],aNormals,a->halfExtents,bNormals,b->halfExtents) ||
-getSeparatingPlane(RPos,aNormals[2],aNormals,a->halfExtents,bNormals,b->halfExtents) ||
-getSeparatingPlane(RPos,bNormals[0],aNormals,a->halfExtents,bNormals,b->halfExtents) ||
-getSeparatingPlane(RPos,bNormals[1],aNormals,a->halfExtents,bNormals,b->halfExtents) ||
-getSeparatingPlane(RPos,bNormals[2],aNormals,a->halfExtents,bNormals,b->halfExtents) ||
-getSeparatingPlane(RPos,fvec3Cross(aNormals[0],bNormals[0]),aNormals,a->halfExtents,bNormals,b->halfExtents) ||
-getSeparatingPlane(RPos,fvec3Cross(aNormals[0],bNormals[1]),aNormals,a->halfExtents,bNormals,b->halfExtents) ||
-getSeparatingPlane(RPos,fvec3Cross(aNormals[0],bNormals[2]),aNormals,a->halfExtents,bNormals,b->halfExtents) ||
-getSeparatingPlane(RPos,fvec3Cross(aNormals[1],bNormals[0]),aNormals,a->halfExtents,bNormals,b->halfExtents) ||
-getSeparatingPlane(RPos,fvec3Cross(aNormals[1],bNormals[1]),aNormals,a->halfExtents,bNormals,b->halfExtents) ||
-getSeparatingPlane(RPos,fvec3Cross(aNormals[1],bNormals[2]),aNormals,a->halfExtents,bNormals,b->halfExtents) ||
-getSeparatingPlane(RPos,fvec3Cross(aNormals[2],bNormals[0]),aNormals,a->halfExtents,bNormals,b->halfExtents) ||
-getSeparatingPlane(RPos,fvec3Cross(aNormals[2],bNormals[1]),aNormals,a->halfExtents,bNormals,b->halfExtents) ||
-getSeparatingPlane(RPos,fvec3Cross(aNormals[2],bNormals[2]),aNormals,a->halfExtents,bNormals,b->halfExtents));
-}
-*/
 
 /******************* Files */
 char *LoadFileA(char *path, size_t *size){
@@ -857,7 +759,7 @@ typedef struct {
 	int width,height,rowPitch;
 	uint32_t *pixels;
 } Image;
-void LoadImageFromFile(Image *img, WCHAR *path, bool flip){
+void LoadImageFromFile(Image *img, WCHAR *path, bool flip, bool bgr){
 	static IWICImagingFactory2 *ifactory = 0;
 	if (!ifactory && FAILED(CoCreateInstance(&CLSID_WICImagingFactory2,0,CLSCTX_INPROC_SERVER,&IID_IWICImagingFactory2,&ifactory))){
 		FatalErrorW(L"LoadImageFromFile: failed to create IWICImagingFactory2");
@@ -887,13 +789,24 @@ void LoadImageFromFile(Image *img, WCHAR *path, bool flip){
 			FatalErrorW(L"LoadImageFromFile: %s CopyPixels failed",path);
 		}
 	}
+	if (bgr){
+		for (int y = 0; y < img->height; y++){
+			for (int x = 0; x < img->width; x++){
+				uint8_t *p = img->pixels+y*img->width+x;
+				uint8_t r = p[0];
+				p[0] = p[2];
+				p[2] = r;
+			}
+		}
+	}
 	convertedSrc->lpVtbl->Release(convertedSrc);
 	pFrame->lpVtbl->Release(pFrame);
 	pDecoder->lpVtbl->Release(pDecoder);
 }
 
 /********************** DarkViewer 2 */
-WCHAR gpath[MAX_PATH+16];
+WCHAR gpath[MAX_PATH+64];
+WCHAR currentFolder[MAX_PATH+64];
 HWND gwnd;
 HDC hdc;
 HCURSOR cursorArrow, cursorFinger, cursorPan;
@@ -937,13 +850,90 @@ void Maximize(){
 void Minimize(){
 	ShowWindow(gwnd,SW_MINIMIZE);
 }
-Button bMinimize = {.func = Minimize},bMaximize = {.func = Maximize},bClose = {.func = Close};
+LIST_IMPLEMENTATION(LPWSTR)
+Image image;
+LPWSTRList images;
+int imageIndex;
+void GetImagesInFolder(LPWSTRList *list, WCHAR *path){
+	LIST_FREE(list);
+	WIN32_FIND_DATAW fd;
+	HANDLE hFind = 0;
+	if ((hFind = FindFirstFileW(path,&fd)) == INVALID_HANDLE_VALUE) FatalErrorW(L"GetImagesInFolder: Folder not found: %s",path);
+	do {
+		//FindFirstFile will always return "." and ".." as the first two directories.
+		if (wcscmp(fd.cFileName,L".") && wcscmp(fd.cFileName,L"..") && !(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)){
+			size_t len = wcslen(fd.cFileName);
+			if (len > 4 && (!wcscmp(fd.cFileName+len-4,L".jpg") || !wcscmp(fd.cFileName+len-4,L".png"))){
+				LPWSTR *s = LPWSTRListMakeRoom(list,1);
+				*s = MallocOrDie((len+1)*sizeof(WCHAR));
+				wcscpy(*s,fd.cFileName);
+				list->used++;
+			}
+		}
+	} while (FindNextFileW(hFind,&fd));
+	FindClose(hFind);
+}
+void OpenImage(){
+	IFileDialog *pfd;
+	IShellItem *psi;
+	PWSTR path = 0;
+	COMDLG_FILTERSPEC fs = {L"Image files", L"*.png;*.jpg;*.jpeg"};
+	if (SUCCEEDED(CoCreateInstance(&CLSID_FileOpenDialog,0,CLSCTX_INPROC_SERVER,&IID_IFileOpenDialog,&pfd))){
+		pfd->lpVtbl->SetFileTypes(pfd,1,&fs); 
+		pfd->lpVtbl->SetTitle(pfd,L"Open Image");
+		pfd->lpVtbl->Show(pfd,gwnd);
+		if (SUCCEEDED(pfd->lpVtbl->GetResult(pfd,&psi))){
+			if (SUCCEEDED(psi->lpVtbl->GetDisplayName(psi,SIGDN_FILESYSPATH,&path))){
+				if (image.pixels) free(image.pixels);
+				LoadImageFromFile(&image,path,false,true);
+				_snwprintf(gpath,COUNT(gpath),L"%s - DarkViewer 2",path);
+				SetWindowTextW(gwnd,gpath);
+				wcscpy(gpath,path);
+				wcscpy(currentFolder,path);
+				WCHAR *s = wcsrchr(gpath,L'\\');
+				currentFolder[s-gpath+1] = 0;
+				WCHAR *name = (s-gpath)+path+1;
+				s[1] = L'*';
+				s[2] = 0;
+				GetImagesInFolder(&images,gpath);
+				for (int i = 0; i < images.used; i++){
+					if (!wcscmp(images.elements[i],name)){
+						imageIndex = i;
+						break;
+					}
+				}
+				InvalidateRect(gwnd,0,0);
+				CoTaskMemFree(path);
+			}
+			psi->lpVtbl->Release(psi);
+		}
+		pfd->lpVtbl->Release(pfd);
+	}
+}
+void ToggleInterpolation();
+Button
+	buttonMinimize = {.func = Minimize},
+	buttonMaximize = {.func = Maximize},
+	buttonClose = {.func = Close},
+	buttonOpenImage = {.string = L"Open Image", .func = OpenImage},
+	buttonInterpolation = {.string = L"Interpolation: Off", .func = ToggleInterpolation};
+void ToggleInterpolation(){
+	interpolation = !interpolation;
+	buttonInterpolation.string = interpolation ? L"Interpolation: On" : L"Interpolation: Off";
+	InvalidateRect(gwnd,0,0);
+}
 Button *hoveredButton;
 RECT rTitlebar,rCaption,rClient;
-HBRUSH bSystem,bSystemHovered,bCloseHovered,bCaption;
-HPEN pUnfocused,pFocused;
+HBRUSH brushSystem,brushSystemHovered,brushCloseHovered,brushCaption;
+HPEN penUnfocused,penFocused;
+HFONT captionfont;
 
-void CalcRects(){
+typedef struct {
+	BITMAPINFOHEADER    bmiHeader;
+	RGBQUAD             bmiColors[4];
+} BITMAPINFO_TRUECOLOR32;
+
+void CalcRects(HDC hdc){
 	HTHEME theme = OpenThemeData(gwnd,L"WINDOW");
 	SIZE size = {0};
 	GetThemePartSize(theme,0,WP_CAPTION,CS_ACTIVE,0,TS_TRUE,&size);
@@ -956,19 +946,34 @@ void CalcRects(){
 	int buttonWidth = dpiScale(47);
 	int buttonHeight = rTitlebar.bottom;
 
-	bClose.rect = rTitlebar;
-	bClose.rect.left = bClose.rect.right - buttonWidth;
+	buttonClose.rect = rTitlebar;
+	buttonClose.rect.left = buttonClose.rect.right - buttonWidth;
 
-	bMaximize.rect = bClose.rect;
-	bMaximize.rect.left -= buttonWidth;
-	bMaximize.rect.right -= buttonWidth;
+	buttonMaximize.rect = buttonClose.rect;
+	buttonMaximize.rect.left -= buttonWidth;
+	buttonMaximize.rect.right -= buttonWidth;
 
-	bMinimize.rect = bMaximize.rect;
-	bMinimize.rect.left -= buttonWidth;
-	bMinimize.rect.right -= buttonWidth;
+	buttonMinimize.rect = buttonMaximize.rect;
+	buttonMinimize.rect.left -= buttonWidth;
+	buttonMinimize.rect.right -= buttonWidth;
+
+	RECT r = {0};
+	DrawTextW(hdc,buttonOpenImage.string,wcslen(buttonOpenImage.string),&r,DT_NOPREFIX|DT_CALCRECT);
+	buttonOpenImage.rect = rTitlebar;
+	buttonOpenImage.rect.right = r.right + dpiScale(16);
+
+	r.left = 0;
+	r.top = 0;
+	r.right = 0;
+	r.bottom = 0;
+	DrawTextW(hdc,buttonInterpolation.string,wcslen(buttonInterpolation.string),&r,DT_NOPREFIX|DT_CALCRECT);
+	buttonInterpolation.rect = rTitlebar;
+	buttonInterpolation.rect.left = buttonOpenImage.rect.right;
+	buttonInterpolation.rect.right = buttonInterpolation.rect.left + r.right + dpiScale(16);
 
 	rCaption = rTitlebar;
-	rCaption.right = bMinimize.rect.left;
+	rCaption.left = buttonInterpolation.rect.right;
+	rCaption.right = buttonMinimize.rect.left;
 }
 
 LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
@@ -998,7 +1003,13 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			break;
 		}
 		case WM_ACTIVATE:{
-			CalcRects();
+			HDC hdc = GetDC(hwnd);
+			HFONT oldfont = SelectObject(hdc,captionfont);
+			SetTextColor(hdc,RGB(255,255,255));
+			SetBkMode(hdc,TRANSPARENT);
+			CalcRects(hdc);
+			SelectObject(hdc,oldfont);
+			ReleaseDC(hwnd,hdc);
 			InvalidateRect(hwnd,&rTitlebar,0);
 			return DefWindowProcW(hwnd,uMsg,wParam,lParam);
 		}
@@ -1028,19 +1039,29 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			POINT cursor;
 			GetCursorPos(&cursor);
 			ScreenToClient(hwnd,&cursor);
-			if (PtInRect(&bMinimize.rect,cursor)){
-				if (hoveredButton != &bMinimize){
-					hoveredButton = &bMinimize;
+			if (PtInRect(&buttonMinimize.rect,cursor)){
+				if (hoveredButton != &buttonMinimize){
+					hoveredButton = &buttonMinimize;
 					InvalidateRect(hwnd,0,0);
 				}
-			} else if (PtInRect(&bMaximize.rect,cursor)){
-				if (hoveredButton != &bMaximize){
-					hoveredButton = &bMaximize;
+			} else if (PtInRect(&buttonMaximize.rect,cursor)){
+				if (hoveredButton != &buttonMaximize){
+					hoveredButton = &buttonMaximize;
 					InvalidateRect(hwnd,0,0);
 				}
-			} else if (PtInRect(&bClose.rect,cursor)){
-				if (hoveredButton != &bClose){
-					hoveredButton = &bClose;
+			} else if (PtInRect(&buttonClose.rect,cursor)){
+				if (hoveredButton != &buttonClose){
+					hoveredButton = &buttonClose;
+					InvalidateRect(hwnd,0,0);
+				}
+			} else if (PtInRect(&buttonOpenImage.rect,cursor)){
+				if (hoveredButton != &buttonOpenImage){
+					hoveredButton = &buttonOpenImage;
+					InvalidateRect(hwnd,0,0);
+				}
+			} else if (PtInRect(&buttonInterpolation.rect,cursor)){
+				if (hoveredButton != &buttonInterpolation){
+					hoveredButton = &buttonInterpolation;
 					InvalidateRect(hwnd,0,0);
 				}
 			} else if (hoveredButton){
@@ -1068,18 +1089,21 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			HDC phdc = BeginPaint(hwnd,&ps), hdc;
 			HPAINTBUFFER pb = BeginBufferedPaint(phdc,&ps.rcPaint,BPBF_COMPATIBLEBITMAP,NULL,&hdc);
 
-			CalcRects();
+			HFONT oldfont = SelectObject(hdc,captionfont);
+			SetTextColor(hdc,RGB(255,255,255));
+			SetBkMode(hdc,TRANSPARENT);
+			CalcRects(hdc);
 			BOOL focus = GetFocus();
-			SelectObject(hdc,focus ? pFocused : pUnfocused);
+			SelectObject(hdc,focus ? penFocused : penUnfocused);
 
-			FillRect(hdc,&rCaption,bCaption);
-			FillRect(hdc,&bMinimize.rect,hoveredButton == &bMinimize ? bSystemHovered : bSystem);
-			FillRect(hdc,&bMaximize.rect,hoveredButton == &bMaximize ? bSystemHovered : bSystem);
-			FillRect(hdc,&bClose.rect,hoveredButton == &bClose ? bSystemHovered : bSystem);
+			FillRect(hdc,&rCaption,brushCaption);
+			FillRect(hdc,&buttonMinimize.rect,hoveredButton == &buttonMinimize ? brushSystemHovered : brushSystem);
+			FillRect(hdc,&buttonMaximize.rect,hoveredButton == &buttonMaximize ? brushSystemHovered : brushSystem);
+			FillRect(hdc,&buttonClose.rect,hoveredButton == &buttonClose ? brushSystemHovered : brushSystem);
 			
 			int iconWidth = dpiScale(10);
 			RECT ir = {0,0,iconWidth,iconWidth};
-			CenterRectInRect(&ir,&bClose.rect);
+			CenterRectInRect(&ir,&buttonClose.rect);
 			MoveToEx(hdc,ir.left,ir.top,NULL);
 			LineTo(hdc,ir.right + 1,ir.bottom + 1);
 			MoveToEx(hdc,ir.left,ir.bottom,NULL);
@@ -1090,10 +1114,10 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			ir.top = 0;
 			ir.right = iconWidth;
 			ir.bottom = iconWidth;
-			CenterRectInRect(&ir,&bMaximize.rect);
+			CenterRectInRect(&ir,&buttonMaximize.rect);
 			if (WindowMaximized(hwnd)){
 				Rectangle(hdc,ir.left+2,ir.top-2,ir.right+2,ir.bottom-2);
-				FillRect(hdc,&ir,hoveredButton == &bMaximize ? bSystemHovered : bSystem);
+				FillRect(hdc,&ir,hoveredButton == &buttonMaximize ? brushSystemHovered : brushSystem);
 			}
 			Rectangle(hdc,ir.left,ir.top,ir.right,ir.bottom);
 
@@ -1101,10 +1125,33 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			ir.top = 0;
 			ir.right = iconWidth;
 			ir.bottom = 1;
-			CenterRectInRect(&ir,&bMinimize.rect);
+			CenterRectInRect(&ir,&buttonMinimize.rect);
 			MoveToEx(hdc,ir.left,ir.top,NULL);
 			LineTo(hdc,ir.right,ir.top);
 
+			FillRect(hdc,&buttonOpenImage.rect,hoveredButton == &buttonOpenImage ? brushSystemHovered : brushSystem);
+			DrawTextW(hdc,buttonOpenImage.string,wcslen(buttonOpenImage.string),&buttonOpenImage.rect,DT_NOPREFIX|DT_SINGLELINE|DT_CENTER|DT_VCENTER);
+			FillRect(hdc,&buttonInterpolation.rect,hoveredButton == &buttonInterpolation ? brushSystemHovered : brushSystem);
+			DrawTextW(hdc,buttonInterpolation.string,wcslen(buttonInterpolation.string),&buttonInterpolation.rect,DT_NOPREFIX|DT_SINGLELINE|DT_CENTER|DT_VCENTER);
+			GetWindowTextW(hwnd,gpath,COUNT(gpath));
+			DrawTextW(hdc,gpath,wcslen(gpath),&rCaption,DT_NOPREFIX|DT_SINGLELINE|DT_CENTER|DT_VCENTER|DT_END_ELLIPSIS);
+
+			if (image.pixels){
+				BITMAPINFO_TRUECOLOR32 bmi = {0};
+				bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+				bmi.bmiHeader.biWidth = image.width;
+				bmi.bmiHeader.biHeight = -image.height;
+				bmi.bmiHeader.biPlanes = 1;
+				bmi.bmiHeader.biCompression = BI_RGB | BI_BITFIELDS;
+				bmi.bmiHeader.biBitCount = 32;
+				bmi.bmiColors[0].rgbRed = 0xff;
+				bmi.bmiColors[1].rgbGreen = 0xff;
+				bmi.bmiColors[2].rgbBlue = 0xff;
+				SetStretchBltMode(hdc,interpolation ? HALFTONE : COLORONCOLOR);
+				StretchDIBits(hdc,rClient.left,rClient.top,rClient.right,rClient.bottom-rClient.top,0,0,image.width,image.height,image.pixels,&bmi,DIB_RGB_COLORS,SRCCOPY);
+			}
+
+			SelectObject(hdc,oldfont);
 			EndBufferedPaint(pb,TRUE);
 			EndPaint(hwnd,&ps);
 			return 0;
@@ -1131,13 +1178,17 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 		//LoadImg(argv[1]);
 	}
 
-	bSystem = CreateSolidBrush(RGB(9,18,25));
-	bSystemHovered = CreateSolidBrush(RGB(40,40,40));
-	bCloseHovered = CreateSolidBrush(RGB(0xCC,0,0));
-	bCaption = CreateSolidBrush(RGB(0,120,0));
+	brushSystem = CreateSolidBrush(RGB(9,18,25));
+	brushSystemHovered = CreateSolidBrush(RGB(40,40,40));
+	brushCloseHovered = CreateSolidBrush(RGB(0xCC,0,0));
+	brushCaption = CreateSolidBrush(RGB(9,18,25));
 	
-	pUnfocused = CreatePen(PS_SOLID,1,RGB(127,127,127));
-	pFocused = CreatePen(PS_SOLID,1,RGB(255,141,61));
+	penUnfocused = CreatePen(PS_SOLID,1,RGB(127,127,127));
+	penFocused = CreatePen(PS_SOLID,1,RGB(255,141,61));
+
+	NONCLIENTMETRICSW ncm = {.cbSize = sizeof(ncm)};
+	SystemParametersInfoW(SPI_GETNONCLIENTMETRICS,sizeof(ncm),&ncm,0);
+	captionfont = CreateFontIndirectW(&ncm.lfCaptionFont);
 
 	wndclass.hInstance = GetModuleHandleW(0);
 	RegisterClassW(&wndclass);
