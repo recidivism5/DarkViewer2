@@ -343,6 +343,7 @@ Button
 	buttonInterpolation = {.string = L"Interpolation: Off", .func = ToggleInterpolation},
 	buttonLeft = {.func = Left},
 	buttonRight = {.func = Right};
+bool leftVisible,rightVisible;
 void ToggleInterpolation(){
 	interpolation = !interpolation;
 	buttonInterpolation.string = interpolation ? L"Interpolation: On" : L"Interpolation: Off";
@@ -476,58 +477,78 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			POINT cursor;
 			GetCursorPos(&cursor);
 			ScreenToClient(hwnd,&cursor);
-			if (PtInRect(&rClient,cursor)){
-				SetCursor(scale > 1 ? cursorPan : cursorArrow);
-			} else if (PtInRect(&rTitlebar,cursor) && GetCursor()==cursorPan){
-				SetCursor(cursorArrow);
-			}
+			bool invalidate = false;
 			if (pan){
 				pos[0] = originalPos[0] + (cursor.x - panPoint.x);
 				pos[1] = originalPos[1] + (cursor.y - panPoint.y);
-				InvalidateRect(hwnd,0,0);
+				invalidate = true;
 			} else {
 				if (PtInRect(&buttonMinimize.rect,cursor)){
 					if (hoveredButton != &buttonMinimize){
 						hoveredButton = &buttonMinimize;
-						InvalidateRect(hwnd,0,0);
+						invalidate = true;
 					}
 				} else if (PtInRect(&buttonMaximize.rect,cursor)){
 					if (hoveredButton != &buttonMaximize){
 						hoveredButton = &buttonMaximize;
-						InvalidateRect(hwnd,0,0);
+						invalidate = true;
 					}
 				} else if (PtInRect(&buttonClose.rect,cursor)){
 					if (hoveredButton != &buttonClose){
 						hoveredButton = &buttonClose;
-						InvalidateRect(hwnd,0,0);
+						invalidate = true;
 					}
 				} else if (PtInRect(&buttonOpenImage.rect,cursor)){
 					if (hoveredButton != &buttonOpenImage){
 						hoveredButton = &buttonOpenImage;
-						InvalidateRect(hwnd,0,0);
+						invalidate = true;
 					}
 				} else if (PtInRect(&buttonInterpolation.rect,cursor)){
 					if (hoveredButton != &buttonInterpolation){
 						hoveredButton = &buttonInterpolation;
-						InvalidateRect(hwnd,0,0);
+						invalidate = true;
 					}
 				} else if (PtInRect(&buttonLeft.rect,cursor)){
 					if (hoveredButton != &buttonLeft){
 						hoveredButton = &buttonLeft;
-						InvalidateRect(hwnd,0,0);
+						invalidate = true;
 					}
 				} else if (PtInRect(&buttonRight.rect,cursor)){
 					if (hoveredButton != &buttonRight){
 						hoveredButton = &buttonRight;
-						InvalidateRect(hwnd,0,0);
+						invalidate = true;
 					}
 				} else if (hoveredButton){
 					hoveredButton = 0;
-					InvalidateRect(hwnd,0,0);
+					invalidate = true;
 				}
-				TRACKMOUSEEVENT tme = {sizeof(tme),uMsg == WM_NCMOUSEMOVE ? TME_LEAVE|TME_NONCLIENT : TME_LEAVE,hwnd,0};
-				TrackMouseEvent(&tme);
 			}
+			if (PtInRect(&rClient,cursor)){
+				if (cursor.x < buttonLeft.rect.right+20){
+					if (!leftVisible){
+						leftVisible = true;
+							invalidate = true;
+					}
+				} else if (leftVisible){
+					leftVisible = false;
+						invalidate = true;
+				}
+				if (cursor.x > buttonRight.rect.left-20){
+					if (!rightVisible){
+						rightVisible = true;
+						invalidate = true;
+					}
+				} else if (rightVisible){
+					rightVisible = false;
+					invalidate = true;
+				}
+				SetCursor(!hoveredButton && scale > 1 ? cursorPan : cursorArrow);
+			} else if (PtInRect(&rTitlebar,cursor) && GetCursor()==cursorPan){
+				SetCursor(cursorArrow);
+			}
+			if (invalidate) InvalidateRect(hwnd,0,0);
+			TRACKMOUSEEVENT tme = {sizeof(tme),uMsg == WM_NCMOUSEMOVE ? TME_LEAVE|TME_NONCLIENT : TME_LEAVE,hwnd,0};
+			TrackMouseEvent(&tme);
 			return 0;
 		}
 		case WM_NCMOUSELEAVE:case WM_MOUSELEAVE:
@@ -688,23 +709,27 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 
 			SelectObject(hdc,GetStockObject(WHITE_BRUSH));
 			SelectObject(hdc,GetStockObject(WHITE_PEN));
-			FillRect(hdc,&buttonLeft.rect,hoveredButton == &buttonLeft ? brushSystemHovered : brushSystem);
-			FillRect(hdc,&buttonRight.rect,hoveredButton == &buttonRight ? brushSystemHovered : brushSystem);
-			POINT triangle[3] = {
-				{buttonLeft.rect.left+4,buttonLeft.rect.top+(buttonLeft.rect.bottom-buttonLeft.rect.top)/2},
-			};
-			triangle[1].x = buttonLeft.rect.right-6;
-			triangle[1].y = triangle[0].y - 6;
-			triangle[2].x = buttonLeft.rect.right-6;
-			triangle[2].y = triangle[0].y + 6;
-			Polygon(hdc,triangle,3);
-			triangle[0].x = buttonRight.rect.right-4;
-			triangle[0].y = buttonRight.rect.top+(buttonRight.rect.bottom-buttonRight.rect.top)/2;
-			triangle[1].x = buttonRight.rect.left+6;
-			triangle[1].y = triangle[0].y - 6;
-			triangle[2].x = buttonRight.rect.left+6;
-			triangle[2].y = triangle[0].y + 6;
-			Polygon(hdc,triangle,3);
+			POINT triangle[3];
+			if (leftVisible){
+				FillRect(hdc,&buttonLeft.rect,hoveredButton == &buttonLeft ? brushSystemHovered : brushSystem);
+				triangle[0].x = buttonLeft.rect.left+4;
+				triangle[0].y = buttonLeft.rect.top+(buttonLeft.rect.bottom-buttonLeft.rect.top)/2;
+				triangle[1].x = buttonLeft.rect.right-6;
+				triangle[1].y = triangle[0].y - 6;
+				triangle[2].x = buttonLeft.rect.right-6;
+				triangle[2].y = triangle[0].y + 6;
+				Polygon(hdc,triangle,3);
+			}
+			if (rightVisible){
+				FillRect(hdc,&buttonRight.rect,hoveredButton == &buttonRight ? brushSystemHovered : brushSystem);
+				triangle[0].x = buttonRight.rect.right-4;
+				triangle[0].y = buttonRight.rect.top+(buttonRight.rect.bottom-buttonRight.rect.top)/2;
+				triangle[1].x = buttonRight.rect.left+6;
+				triangle[1].y = triangle[0].y - 6;
+				triangle[2].x = buttonRight.rect.left+6;
+				triangle[2].y = triangle[0].y + 6;
+				Polygon(hdc,triangle,3);
+			}
 
 			SelectObject(hdc,oldfont);
 			EndBufferedPaint(pb,TRUE);
