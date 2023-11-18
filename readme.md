@@ -10,3 +10,6 @@
 - Open solution in Visual Studio 2019
 - Select Debug or Release x64
 - Build / Run
+
+## Download:
+- Download the latest binary release from the releases page
