@@ -554,7 +554,9 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			return 0;
 		}
 		case WM_NCMOUSELEAVE:case WM_MOUSELEAVE:
-			if (hoveredButton){
+			if (hoveredButton || leftVisible || rightVisible){
+				leftVisible = false;
+				rightVisible = false;
 				hoveredButton = 0;
 				InvalidateRect(hwnd,0,0);
 			}
