@@ -873,6 +873,27 @@ void GetImagesInFolder(LPWSTRList *list, WCHAR *path){
 	} while (FindNextFileW(hFind,&fd));
 	FindClose(hFind);
 }
+void OpenImageFromNewFolder(WCHAR *path){
+	if (image.pixels) free(image.pixels);
+	ImageFromFile(&image,path,false,true);
+	_snwprintf(gpath,COUNT(gpath),L"%s - DarkViewer 2",path);
+	SetWindowTextW(gwnd,gpath);
+	wcscpy(gpath,path);
+	wcscpy(currentFolder,path);
+	WCHAR *s = wcsrchr(gpath,L'\\');
+	currentFolder[s-gpath+1] = 0;
+	WCHAR *name = (s-gpath)+path+1;
+	s[1] = L'*';
+	s[2] = 0;
+	GetImagesInFolder(&imagePaths,gpath);
+	for (int i = 0; i < imagePaths.used; i++){
+		if (!wcscmp(imagePaths.elements[i],name)){
+			imageIndex = i;
+			break;
+		}
+	}
+	InvalidateRect(gwnd,0,0);
+}
 void OpenImage(){
 	IFileDialog *pfd;
 	IShellItem *psi;
@@ -884,25 +905,7 @@ void OpenImage(){
 		pfd->lpVtbl->Show(pfd,gwnd);
 		if (SUCCEEDED(pfd->lpVtbl->GetResult(pfd,&psi))){
 			if (SUCCEEDED(psi->lpVtbl->GetDisplayName(psi,SIGDN_FILESYSPATH,&path))){
-				if (image.pixels) free(image.pixels);
-				ImageFromFile(&image,path,false,true);
-				_snwprintf(gpath,COUNT(gpath),L"%s - DarkViewer 2",path);
-				SetWindowTextW(gwnd,gpath);
-				wcscpy(gpath,path);
-				wcscpy(currentFolder,path);
-				WCHAR *s = wcsrchr(gpath,L'\\');
-				currentFolder[s-gpath+1] = 0;
-				WCHAR *name = (s-gpath)+path+1;
-				s[1] = L'*';
-				s[2] = 0;
-				GetImagesInFolder(&imagePaths,gpath);
-				for (int i = 0; i < imagePaths.used; i++){
-					if (!wcscmp(imagePaths.elements[i],name)){
-						imageIndex = i;
-						break;
-					}
-				}
-				InvalidateRect(gwnd,0,0);
+				OpenImageFromNewFolder(path);
 				CoTaskMemFree(path);
 			}
 			psi->lpVtbl->Release(psi);
@@ -996,6 +999,7 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			return 0;
 		}
 		case WM_CREATE:{
+			DragAcceptFiles(hwnd,1);
 			gwnd = hwnd;
 			RECT wr;
 			GetWindowRect(hwnd,&wr);
@@ -1160,6 +1164,16 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 					return 0;
 				}
 			}
+			break;
+		}
+		case WM_DROPFILES:{
+			WCHAR p[MAX_PATH];
+			if (DragQueryFileW(wParam,0xFFFFFFFF,0,0) > 1) goto EXIT_DROPFILES;
+			DragQueryFileW(wParam,0,p,COUNT(p));
+			OpenImageFromNewFolder(p);
+		EXIT_DROPFILES:
+			DragFinish(wParam);
+			return 0;
 		}
 		case WM_PAINT:{
 			PAINTSTRUCT ps;
