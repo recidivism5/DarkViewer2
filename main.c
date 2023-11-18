@@ -759,14 +759,14 @@ typedef struct {
 	int width,height,rowPitch;
 	uint32_t *pixels;
 } Image;
-void LoadImageFromFile(Image *img, WCHAR *path, bool flip, bool bgr){
+void ImageFromFile(Image *img, WCHAR *path, bool flip, bool bgr){
 	static IWICImagingFactory2 *ifactory = 0;
 	if (!ifactory && FAILED(CoCreateInstance(&CLSID_WICImagingFactory2,0,CLSCTX_INPROC_SERVER,&IID_IWICImagingFactory2,&ifactory))){
-		FatalErrorW(L"LoadImageFromFile: failed to create IWICImagingFactory2");
+		FatalErrorW(L"ImageFromFile: failed to create IWICImagingFactory2");
 	}
 	IWICBitmapDecoder *pDecoder = 0;
 	if (S_OK != ifactory->lpVtbl->CreateDecoderFromFilename(ifactory,path,0,GENERIC_READ,WICDecodeMetadataCacheOnDemand,&pDecoder)){
-		FatalErrorW(L"LoadImageFromFile: file not found: %s",path);
+		FatalErrorW(L"ImageFromFile: file not found: %s",path);
 	}
 	IWICBitmapFrameDecode *pFrame = 0;
 	pDecoder->lpVtbl->GetFrame(pDecoder,0,&pFrame);
@@ -781,12 +781,12 @@ void LoadImageFromFile(Image *img, WCHAR *path, bool flip, bool bgr){
 		ifactory->lpVtbl->CreateBitmapFlipRotator(ifactory,&pFlipRotator);
 		pFlipRotator->lpVtbl->Initialize(pFlipRotator,convertedSrc,WICBitmapTransformFlipVertical);
 		if (S_OK != pFlipRotator->lpVtbl->CopyPixels(pFlipRotator,0,img->rowPitch,size,img->pixels)){
-			FatalErrorW(L"LoadImageFromFile: %s CopyPixels failed",path);
+			FatalErrorW(L"ImageFromFile: %s CopyPixels failed",path);
 		}
 		pFlipRotator->lpVtbl->Release(pFlipRotator);
 	} else {
 		if (S_OK != convertedSrc->lpVtbl->CopyPixels(convertedSrc,0,img->rowPitch,size,img->pixels)){
-			FatalErrorW(L"LoadImageFromFile: %s CopyPixels failed",path);
+			FatalErrorW(L"ImageFromFile: %s CopyPixels failed",path);
 		}
 	}
 	if (bgr){
@@ -852,7 +852,7 @@ void Minimize(){
 }
 LIST_IMPLEMENTATION(LPWSTR)
 Image image;
-LPWSTRList images;
+LPWSTRList imagePaths;
 int imageIndex;
 void GetImagesInFolder(LPWSTRList *list, WCHAR *path){
 	LIST_FREE(list);
@@ -885,7 +885,7 @@ void OpenImage(){
 		if (SUCCEEDED(pfd->lpVtbl->GetResult(pfd,&psi))){
 			if (SUCCEEDED(psi->lpVtbl->GetDisplayName(psi,SIGDN_FILESYSPATH,&path))){
 				if (image.pixels) free(image.pixels);
-				LoadImageFromFile(&image,path,false,true);
+				ImageFromFile(&image,path,false,true);
 				_snwprintf(gpath,COUNT(gpath),L"%s - DarkViewer 2",path);
 				SetWindowTextW(gwnd,gpath);
 				wcscpy(gpath,path);
@@ -895,9 +895,9 @@ void OpenImage(){
 				WCHAR *name = (s-gpath)+path+1;
 				s[1] = L'*';
 				s[2] = 0;
-				GetImagesInFolder(&images,gpath);
-				for (int i = 0; i < images.used; i++){
-					if (!wcscmp(images.elements[i],name)){
+				GetImagesInFolder(&imagePaths,gpath);
+				for (int i = 0; i < imagePaths.used; i++){
+					if (!wcscmp(imagePaths.elements[i],name)){
 						imageIndex = i;
 						break;
 					}
@@ -1132,6 +1132,34 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 				}
 			}
 			return 0;
+		}
+		case WM_KEYDOWN:{
+			switch (wParam){
+				case VK_LEFT:{
+					if (image.pixels && imageIndex > 0){
+						free(image.pixels);
+						imageIndex--;
+						_snwprintf(gpath,COUNT(gpath),L"%s%s",currentFolder,imagePaths.elements[imageIndex]);
+						ImageFromFile(&image,gpath,0,true);
+						wcscat(gpath,L" - DarkViewer 2");
+						SetWindowTextW(hwnd,gpath);
+						InvalidateRect(hwnd,0,0);
+					}
+					return 0;
+				}
+				case VK_RIGHT:{
+					if (image.pixels && imageIndex < imagePaths.used-1){
+						free(image.pixels);
+						imageIndex++;
+						_snwprintf(gpath,COUNT(gpath),L"%s%s",currentFolder,imagePaths.elements[imageIndex]);
+						ImageFromFile(&image,gpath,0,true);
+						wcscat(gpath,L" - DarkViewer 2");
+						SetWindowTextW(hwnd,gpath);
+						InvalidateRect(hwnd,0,0);
+					}
+					return 0;
+				}
+			}
 		}
 		case WM_PAINT:{
 			PAINTSTRUCT ps;
