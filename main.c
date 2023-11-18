@@ -481,6 +481,8 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			if (pan){
 				pos[0] = originalPos[0] + (cursor.x - panPoint.x);
 				pos[1] = originalPos[1] + (cursor.y - panPoint.y);
+				leftVisible = false;
+				rightVisible = false;
 				invalidate = true;
 			} else {
 				if (PtInRect(&buttonMinimize.rect,cursor)){
@@ -522,29 +524,29 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 					hoveredButton = 0;
 					invalidate = true;
 				}
-			}
-			if (PtInRect(&rClient,cursor)){
-				if (cursor.x < buttonLeft.rect.right+20){
-					if (!leftVisible){
-						leftVisible = true;
+				if (PtInRect(&rClient,cursor)){
+					if (cursor.x < buttonLeft.rect.right+20){
+						if (!leftVisible){
+							leftVisible = true;
 							invalidate = true;
-					}
-				} else if (leftVisible){
-					leftVisible = false;
-						invalidate = true;
-				}
-				if (cursor.x > buttonRight.rect.left-20){
-					if (!rightVisible){
-						rightVisible = true;
+						}
+					} else if (leftVisible){
+						leftVisible = false;
 						invalidate = true;
 					}
-				} else if (rightVisible){
-					rightVisible = false;
-					invalidate = true;
+					if (cursor.x > buttonRight.rect.left-20){
+						if (!rightVisible){
+							rightVisible = true;
+							invalidate = true;
+						}
+					} else if (rightVisible){
+						rightVisible = false;
+						invalidate = true;
+					}
+					SetCursor(!hoveredButton && scale > 1 ? cursorPan : cursorArrow);
+				} else if (PtInRect(&rTitlebar,cursor) && GetCursor()==cursorPan){
+					SetCursor(cursorArrow);
 				}
-				SetCursor(!hoveredButton && scale > 1 ? cursorPan : cursorArrow);
-			} else if (PtInRect(&rTitlebar,cursor) && GetCursor()==cursorPan){
-				SetCursor(cursorArrow);
 			}
 			if (invalidate) InvalidateRect(hwnd,0,0);
 			TRACKMOUSEEVENT tme = {sizeof(tme),uMsg == WM_NCMOUSEMOVE ? TME_LEAVE|TME_NONCLIENT : TME_LEAVE,hwnd,0};
