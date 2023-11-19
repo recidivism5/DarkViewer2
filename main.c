@@ -264,7 +264,15 @@ Image image;
 LPWSTRList imagePaths;
 int imageIndex;
 void GetImagesInFolder(LPWSTRList *list, WCHAR *path){
-	LIST_FREE(list);
+	if (list->total){
+		for (int i = 0; i < list->used; i++){
+			free(list->elements[i]);
+		}
+		free(list->elements);
+		list->elements = 0;
+		list->total = 0;
+		list->used = 0;
+	}
 	WIN32_FIND_DATAW fd;
 	HANDLE hFind = 0;
 	if ((hFind = FindFirstFileW(path,&fd)) == INVALID_HANDLE_VALUE) FatalErrorW(L"GetImagesInFolder: Folder not found: %s",path);
